@@ -6,6 +6,10 @@ import threading
 import time
 from wrapper import recv_from_any_link, send_to_link, get_switch_mac, get_interface_name
 
+own_bridge_ID = 0
+root_bridge_ID = 0
+root_path_cost = 0
+
 def parse_ethernet_header(data):
     # Unpack the header fields from the byte array
     #dest_mac, src_mac, ethertype = struct.unpack('!6s6sH', data[:14])
@@ -29,9 +33,44 @@ def create_vlan_tag(vlan_id):
     # vlan_id & 0x0FFF ensures that only the last 12 bits are used
     return struct.pack('!H', 0x8200) + struct.pack('!H', vlan_id & 0x0FFF)
 
-def send_bdpu_every_sec():
+def build_bpdu(root_bridge_id, sender_bridge_id, root_path_cost):
+    dst_mac = b'\x01\x80\xC2\x00\x00\x00'
+    src_mac = get_switch_mac()
+
+    STD = DSAP = SSAP = 0x42
+    CONTROL = 0x03
+    BPDU_HEADER = b'\x00' * 4
+
+    llc_header = struct.pack("!BBB", DSAP, SSAP, CONTROL)
+    bpdu_config = struct.pack("!B8sI8sHHHHH",
+        0x00, # flags
+        root_bridge_id,
+        root_path_cost,
+        sender_bridge_id,
+        0, # port_id
+        0, # max_age
+        0, # hello_time
+        0,) # forward delay
+
+    llc_length = len(llc_header) + len(bpdu_config) + len(BPDU_HEADER)
+
+    # Pack the LLC_LENGTH as 2 bytes
+    llc_length_field = struct.pack("!H", llc_length)
+
+    # Building actual packet
+    bpdu_packet = dst_mac + src_mac + llc_length_field + llc_header + BPDU_HEADER + bpdu_config
+
+    return bpdu_packet
+
+def send_bdpu_every_sec(port_config):
     while True:
-        # TODO Send BDPU every second if necessary
+        global root_bridge_ID
+        global own_bridge_ID_bridge_ID
+        if own_bridge_ID == root_bridge_ID:
+            bpdu_packet = build_bpdu(own_bridge_ID, own_bridge_ID, 0)
+            for port in port_config:
+                if port_config[port] == "T":
+                    send_to_link(port, len(bpdu_packet), bpdu_packet)
         time.sleep(1)
 
 def do_broadcast_from_access(packet, interfaces, port_config):
@@ -71,6 +110,10 @@ def main():
 
     # Port configuration (access > 10 / trunk = T)
     port_config = {}
+
+    # State of the ports
+    port_state = {}
+
     with open(switch_config, 'r') as file:
         switch_priority = int(file.readline().rstrip())
         for line in file:
@@ -79,16 +122,26 @@ def main():
             for i in interfaces:
                 if interface_name == get_interface_name(i):
                     port_config[i] = vlan_id
+                    if vlan_id == "T":
+                        port_state[i] = "BLOCKING"
+                    else:
+                        port_state[i] = "DESIGNATED"
+
     
     print("# Starting switch with id {}".format(switch_id), flush=True)
     print("[INFO] Switch MAC", ':'.join(f'{b:02x}' for b in get_switch_mac()))
 
     # Create and start a new thread that deals with sending BDPU
-    t = threading.Thread(target=send_bdpu_every_sec)
+    t = threading.Thread(target=send_bdpu_every_sec(port_config))
     t.start()
     # Printing interface names
     for i in interfaces:
         print(get_interface_name(i))
+
+        
+    root_path_cost = 0
+    own_bridge_ID = switch_priority
+    root_bridge_ID = own_bridge_ID
 
     while True:
         # Note that data is of type bytes([...]).
