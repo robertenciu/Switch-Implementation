@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/home/enciu/ReLe/tema1-public-main/switch.py", line 156, in <module>
+    main()
+  File "/home/enciu/ReLe/tema1-public-main/switch.py", line 139, in main
+    if vlan_id == int(port_config[forward_interface]): # It's same VLAN
+ValueError: invalid literal for int() with base 10: 'T'

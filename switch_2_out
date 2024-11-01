@@ -1,0 +1,27 @@
+Initializing the switch
+# Starting switch with id 2
+[INFO] Switch MAC de:fe:c8:ed:02:04
+r-0
+r-1
+rr-0-2
+rr-1-2
+Destination MAC: de:ad:be:ef:00:01
+Source MAC: de:ad:be:ef:00:04
+EtherType: 2048
+Received frame of size 42 on interface 0
+Destination MAC: ff:ff:ff:ff:ff:ff
+Source MAC: de:ad:be:ef:00:01
+EtherType: 2054
+Received frame of size 46 on interface 2
+Destination MAC: de:ad:be:ef:00:01
+Source MAC: de:ad:be:ef:00:04
+EtherType: 2054
+Received frame of size 42 on interface 0
+Destination MAC: de:ad:be:ef:00:01
+Source MAC: de:ad:be:ef:00:04
+EtherType: 2048
+Received frame of size 46 on interface 3
+Setting up interface: r-0
+Setting up interface: r-1
+Setting up interface: rr-0-2
+Setting up interface: rr-1-2

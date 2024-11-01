@@ -1,9 +1,31 @@
-# Switch-Implementation
- 
-## Cerinte
+Scheleton for the Hub implementation.
 
-Pentru rezolvarea temei, trebuie să implementați funcționalitatea unui switch. Va recomandăm să folosiți cel puțin ping pentru a testa implementarea și Wireshark pentru depanare și analiză corectitudinii. Punctajul este împărțit în mai multe componente, după cum urmează:
+## Running
 
--Procesul de comutare (30p). Va trebui să implementați funcționalitatea descrisă în secțiunea Procesul de Comutare. Pentru acest exercițiu nu este nevoie să implementați funcționalitatea referitoare la VLAN sau STP. Pentru a evita buclele, vom porni doar switch-urile 0 și 1.
--VLAN (30p). Vom implementa funcționalitatea de Virtual Local Area Networks (VLANs). Fișierele de configurație ale switch-urilor se găsesc în directorul configs. Pentru a evita buclele, vom porni doar switch-urile 0 si 1.
--STP (40p). In acest exercițiu vom introduce si switch-ul 2, care va determina apariția unei bucle. Se cere implementarea protocolului STP simplificat, descris in enunț, pentru a evita trimiterea pachetelor la infinit.
+```bash
+sudo python3 checker/topo.py
+```
+
+This will open 9 terminals, 6 hosts and 3 for the switches. On the switch terminal you will run 
+
+```bash
+make run_switch SWITCH_ID=X # X is 0,1 or 2
+```
+
+The hosts have the following IP addresses.
+```
+host0 192.168.1.1
+host1 192.168.1.2
+host2 192.168.1.3
+host3 192.168.1.4
+host4 192.168.1.5
+host5 192.168.1.6
+```
+
+We will be testing using the ICMP. For example, from host0 we will run:
+
+```
+ping 192.168.1.2
+```
+
+Note: We will use wireshark for debugging. From any terminal you can run `wireshark&`.
