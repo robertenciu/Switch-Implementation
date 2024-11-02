@@ -6,9 +6,14 @@ import threading
 import time
 from wrapper import recv_from_any_link, send_to_link, get_switch_mac, get_interface_name
 
-own_bridge_ID = 0
-root_bridge_ID = 0
+BPDU_DST_MAC = b'\x01\x80\xC2\x00\x00\x00'
+own_bridge_ID = b'\x00\x00\x00\x00\x00\x00\x00\x00'
+root_bridge_ID = b'\x00\x00\x00\x00\x00\x00\x00\x00'
 root_path_cost = 0
+root_port = 0
+switch_priority = 0
+ # State of the ports
+port_state = {}
 
 def parse_ethernet_header(data):
     # Unpack the header fields from the byte array
@@ -34,7 +39,7 @@ def create_vlan_tag(vlan_id):
     return struct.pack('!H', 0x8200) + struct.pack('!H', vlan_id & 0x0FFF)
 
 def build_bpdu(root_bridge_id, sender_bridge_id, root_path_cost):
-    dst_mac = b'\x01\x80\xC2\x00\x00\x00'
+    dst_mac = BPDU_DST_MAC
     src_mac = get_switch_mac()
 
     STD = DSAP = SSAP = 0x42
@@ -48,6 +53,7 @@ def build_bpdu(root_bridge_id, sender_bridge_id, root_path_cost):
         root_path_cost,
         sender_bridge_id,
         0, # port_id
+        0, # message_age
         0, # max_age
         0, # hello_time
         0,) # forward delay
@@ -65,13 +71,53 @@ def build_bpdu(root_bridge_id, sender_bridge_id, root_path_cost):
 def send_bdpu_every_sec(port_config):
     while True:
         global root_bridge_ID
-        global own_bridge_ID_bridge_ID
+        global own_bridge_ID
         if own_bridge_ID == root_bridge_ID:
             bpdu_packet = build_bpdu(own_bridge_ID, own_bridge_ID, 0)
             for port in port_config:
                 if port_config[port] == "T":
                     send_to_link(port, len(bpdu_packet), bpdu_packet)
         time.sleep(1)
+
+def receive_bpdu(data, interface, port_config):
+    global root_bridge_ID
+    global own_bridge_ID
+    global root_path_cost
+    global root_port
+    global port_state
+    bpdu_root_bridge_ID = data[22:30]
+    bpdu_path_cost = int(data[30:34])
+    bpdu_bridge_ID = data[34:42]
+
+    if bpdu_root_bridge_ID < root_bridge_ID:
+        root_bridge_ID = bpdu_root_bridge_ID
+        root_path_cost = bpdu_path_cost + 10
+        root_port = interface
+
+        if own_bridge_ID == root_bridge_ID:
+            for port in port_state:
+                if port_config[port] == "T" and port != root_port:
+                    port_state[port] = "BLOCKING"
+        
+        if port_state[root_port] == "BLOCKING":
+            port_state[root_port] == "LISTENING"
+    elif bpdu_root_bridge_ID == root_bridge_ID:
+        if interface == root_port and bpdu_path_cost + 10 < root_path_cost:
+            root_path_cost = bpdu_path_cost + 10
+        elif port != interface:
+            if bpdu_path_cost > root_path_cost:
+                if port_state[interface] != "DESIGNATED":
+                    port_state[interface] = "LISTENING"
+    elif bpdu_bridge_ID == own_bridge_ID:
+        port_state[interface] = "BLOCKING"
+    
+    if own_bridge_ID == root_bridge_ID:
+        for port in port_state:
+            port_state[port] = "DESIGNATED"
+
+
+
+
 
 def do_broadcast_from_access(packet, interfaces, port_config):
     interface, data, length = packet
@@ -97,7 +143,7 @@ def do_broadcast_from_trunk(packet, interfaces, port_config, vlan_id):
 def main():
     # init returns the max interface number. Our interfaces
     # are 0, 1, 2, ..., init_ret value + 1
-
+    global switch_priority
     # The MAC table
     mac_table = {}
 
@@ -111,9 +157,7 @@ def main():
     # Port configuration (access > 10 / trunk = T)
     port_config = {}
 
-    # State of the ports
-    port_state = {}
-
+    global port_state
     with open(switch_config, 'r') as file:
         switch_priority = int(file.readline().rstrip())
         for line in file:
@@ -125,23 +169,25 @@ def main():
                     if vlan_id == "T":
                         port_state[i] = "BLOCKING"
                     else:
-                        port_state[i] = "DESIGNATED"
+                        port_state[i] = "LISTENING"
 
     
     print("# Starting switch with id {}".format(switch_id), flush=True)
     print("[INFO] Switch MAC", ':'.join(f'{b:02x}' for b in get_switch_mac()))
 
+    global own_bridge_ID
+    global root_bridge_ID
+    global root_path_cost
+    root_path_cost = 0
+    own_bridge_ID = switch_priority.to_bytes(8, byteorder='big', signed=False)
+    root_bridge_ID = own_bridge_ID
     # Create and start a new thread that deals with sending BDPU
-    t = threading.Thread(target=send_bdpu_every_sec(port_config))
+    t = threading.Thread(target=send_bdpu_every_sec, args=(port_config,))
     t.start()
     # Printing interface names
     for i in interfaces:
         print(get_interface_name(i))
 
-        
-    root_path_cost = 0
-    own_bridge_ID = switch_priority
-    root_bridge_ID = own_bridge_ID
 
     while True:
         # Note that data is of type bytes([...]).
@@ -152,6 +198,7 @@ def main():
         packet = (interface, data, length)
 
         dest_mac, src_mac, ethertype, vlan_id = parse_ethernet_header(data)
+
 
         # Print the MAC src and MAC dst in human readable format
         dest_mac = ':'.join(f'{b:02x}' for b in dest_mac)
@@ -165,6 +212,11 @@ def main():
         print(f'EtherType: {ethertype}')
 
         print("Received frame of size {} on interface {}".format(length, interface), flush=True)
+        
+        print("primesti?")
+        if dest_mac == BPDU_DST_MAC:
+            receive_bpdu(data, interface)
+            continue
 
         # TODO: Implement forwarding with learning
         mac_table[src_mac] = interface
