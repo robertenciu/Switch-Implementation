@@ -12,7 +12,6 @@ root_bridge_ID = b'\x00\x00\x00\x00\x00\x00\x00\x00'
 root_path_cost = 0
 root_port = 0
 switch_priority = 0
- # State of the ports
 port_state = {}
 
 def parse_ethernet_header(data):
@@ -60,7 +59,6 @@ def build_bpdu(root_bridge_id, sender_bridge_id, root_path_cost):
 
     llc_length = len(llc_header) + len(bpdu_config) + len(BPDU_HEADER)
 
-    # Pack the LLC_LENGTH as 2 bytes
     llc_length_field = struct.pack("!H", llc_length)
 
     # Building actual packet
@@ -68,6 +66,7 @@ def build_bpdu(root_bridge_id, sender_bridge_id, root_path_cost):
 
     return bpdu_packet
 
+# Sending BPDU packets
 def send_bdpu_every_sec(port_config):
     while True:
         global root_bridge_ID
@@ -79,6 +78,7 @@ def send_bdpu_every_sec(port_config):
                     send_to_link(port, len(bpdu_packet), bpdu_packet)
         time.sleep(1)
 
+# Receiving and processing BPDU packet
 def receive_bpdu(data, interface, port_config):
     global root_bridge_ID
     global own_bridge_ID
@@ -105,10 +105,6 @@ def receive_bpdu(data, interface, port_config):
     elif bpdu_root_bridge_ID == root_bridge_ID:
         if interface == root_port and bpdu_path_cost + 10 < root_path_cost:
             root_path_cost = bpdu_path_cost + 10
-        # elif interface != root_port:
-        #     if bpdu_path_cost > root_path_cost:
-        #         if port_state[interface] != "DESIGNATED":
-        #             port_state[interface] = "LISTENING"
     elif bpdu_bridge_ID == own_bridge_ID:
         port_state[interface] = "BLOCKING"
     
@@ -118,35 +114,30 @@ def receive_bpdu(data, interface, port_config):
                 port_state[port] = "LISTENING"
 
 
-
-
-
+# Broadcasting when receiving from access port
 def do_broadcast_from_access(packet, interfaces, port_config):
     interface, data, length = packet
     vlan_id = int(port_config[interface])
     for port in interfaces:
         if interface != port:
             if port_config[interface] == port_config[port]:
-                print("Se trimite pe interfata:", get_interface_name(port))
                 send_to_link(port, length, data)
             elif port_config[port] == "T" and port_state[port] == "LISTENING":
-                print("Se trimite pe interfata:", get_interface_name(port))
                 tagged_frame = data[0:12] + create_vlan_tag(vlan_id) + data[12:]
                 send_to_link(port, length + 4, tagged_frame)
             elif port_config[port] == "T" and port_state[port] == "BLOCKING":
                 pass
 
+# Broadcasting when receiving from trunk port
 def do_broadcast_from_trunk(packet, interfaces, port_config, vlan_id):
     interface, data, length = packet
     for port in interfaces:
         if interface != port:
-            if port_config[port] == "T" and port_state[port] == "LISTENING": # Sending to trunk port
-                print("Se trimite pe interfata:", get_interface_name(port))
+            if port_config[port] == "T" and port_state[port] == "LISTENING":
                 send_to_link(port, length, data)
             elif port_config[port] == "T" and port_state[port] == "BLOCKING":
                 pass
             elif vlan_id == int(port_config[port]):
-                print("Se trimite pe interfata:", get_interface_name(port))
                 send_to_link(port, length - 4, data[0:12] + data[16:])
 
 
@@ -154,6 +145,7 @@ def main():
     # init returns the max interface number. Our interfaces
     # are 0, 1, 2, ..., init_ret value + 1
     global switch_priority
+
     # The MAC table
     mac_table = {}
 
@@ -167,7 +159,9 @@ def main():
     # Port configuration (access > 10 / trunk = T)
     port_config = {}
 
+    # State of the port (LISTENING / BLOCKING)
     global port_state
+
     with open(switch_config, 'r') as file:
         switch_priority = int(file.readline().rstrip())
         for line in file:
@@ -176,14 +170,7 @@ def main():
             for i in interfaces:
                 if interface_name == get_interface_name(i):
                     port_config[i] = vlan_id
-                    # if vlan_id == "T":
-                    #     port_state[i] = "BLOCKING"
-                    # else:
                     port_state[i] = "LISTENING"
-
-    
-    print("# Starting switch with id {}".format(switch_id), flush=True)
-    print("[INFO] Switch MAC", ':'.join(f'{b:02x}' for b in get_switch_mac()))
 
     global own_bridge_ID
     global root_bridge_ID
@@ -191,19 +178,13 @@ def main():
     root_path_cost = 0
     own_bridge_ID = switch_priority.to_bytes(8, byteorder='big', signed=False)
     root_bridge_ID = own_bridge_ID
+
     # Create and start a new thread that deals with sending BDPU
     t = threading.Thread(target=send_bdpu_every_sec, args=(port_config,))
     t.start()
-    # Printing interface names
-    for i in interfaces:
-        print(get_interface_name(i))
 
 
     while True:
-        # Note that data is of type bytes([...]).
-        # b1 = bytes([72, 101, 108, 108, 111])  # "Hello"
-        # b2 = bytes([32, 87, 111, 114, 108, 100])  # " World"
-        # b3 = b1[0:2] + b[3:4].
         interface, data, length = recv_from_any_link()
         packet = (interface, data, length)
 
@@ -213,47 +194,32 @@ def main():
         # Print the MAC src and MAC dst in human readable format
         dest_mac = ':'.join(f'{b:02x}' for b in dest_mac)
         src_mac = ':'.join(f'{b:02x}' for b in src_mac)
-
-        # Note. Adding a VLAN tag can be as easy as
-        # tagged_frame = data[0:12] + create_vlan_tag(10) + data[12:]
-
-        print(port_state)
         
         bpdu_mac = ':'.join(f'{byte:02x}' for byte in BPDU_DST_MAC)
-        if dest_mac == bpdu_mac:
+        if dest_mac == bpdu_mac: #BPDU packet
             receive_bpdu(data, interface, port_config)
         else:
-            
-            print(f'Destination MAC: {dest_mac}')
-            print(f'Source MAC: {src_mac}')
-            print(f'EtherType: {ethertype}')
-
-            print("Received frame of size {} on interface {}".format(length, interface), flush=True)
-            # TODO: Implement forwarding with learning
             mac_table[src_mac] = interface
 
             if vlan_id == -1: # Coming from access port
                 vlan_id = int(port_config[interface])
-                if dest_mac != 'ff:ff:ff:ff:ff:ff': # NOT broadcast
+                if dest_mac != 'ff:ff:ff:ff:ff:ff': # NOT a broadcast
                     if dest_mac in mac_table:
                         forward_interface = mac_table[dest_mac]
                         if port_config[forward_interface] == "T" and port_state[forward_interface] == "LISTENING":
                             tagged_frame = data[0:12] + create_vlan_tag(vlan_id) + data[12:]
-                            print("Se trimite pe interfata:", get_interface_name(forward_interface))
                             send_to_link(forward_interface, length + 4, tagged_frame)
                         elif port_config[forward_interface] == "T" and port_state[forward_interface] == "BLOCKING":
                             pass
                         elif port_config[interface] == port_config[forward_interface]: # It's same VLAN
-                            print("Se trimite pe interfata:", get_interface_name(forward_interface))
                             send_to_link(forward_interface, length, data)
-                        # else: drop
                     else:
                         do_broadcast_from_access(packet, interfaces, port_config)
 
                 else:
                     do_broadcast_from_access(packet, interfaces, port_config)
             else: # Coming form trunk port
-                if dest_mac != 'ff:ff:ff:ff:ff:ff':
+                if dest_mac != 'ff:ff:ff:ff:ff:ff': # NOT a broadcast
                     if dest_mac in mac_table:
                         forward_interface = mac_table[dest_mac]
                         if port_config[forward_interface] == "T" and port_state[forward_interface] == "LISTENING":             
@@ -261,21 +227,11 @@ def main():
                         elif port_config[forward_interface] == "T" and port_state[forward_interface] == "BLOCKING":
                             pass
                         elif vlan_id == int(port_config[forward_interface]): # It's same VLAN
-                            print("Se trimite pe interfata:", get_interface_name(forward_interface))
                             send_to_link(forward_interface, length - 4, data[0:12] + data[16:])
-                        # else: drop
                     else:
                         do_broadcast_from_trunk(packet, interfaces, port_config, vlan_id)
                 else:
                     do_broadcast_from_trunk(packet, interfaces, port_config, vlan_id)
-
-            # TODO: Implement VLAN support
-
-
-            # TODO: Implement STP support
-
-            # data is of type bytes.
-            # send_to_link(i, length, data)
 
 if __name__ == "__main__":
     main()

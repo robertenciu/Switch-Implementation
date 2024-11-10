@@ -17,5 +17,3 @@ Vom trimite pachete de tip BPDU (Bridge Protocol Data Units) la fiecare secunda,
 Pachetele sunt construite cu ajutorul functiei struct.pack din Python, unde sunt setate campurile de root_bridge_id, root_path_cost, sender_bridge_id, celelalte fiind puse pe 0.
 Functia de primire a pachetelor de tip BPDU este asemanatoare cu cea prezentata in enuntul temei, dar facand abstractie de porturile "Designated".
 In urma implementarii acestui protocol, se verifica la transmiterea pachetelor daca porturile sunt pe "LISTENING".
-
-

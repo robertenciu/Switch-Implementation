@@ -28,13 +28,11 @@ Destination MAC: de:ad:be:ef:00:01
 Source MAC: de:ad:be:ef:00:04
 EtherType: 2054
 Received frame of size 42 on interface 0
-Se trimite pe interfata: rr-1-2
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
 Destination MAC: de:ad:be:ef:00:04
 Source MAC: de:ad:be:ef:00:01
 EtherType: 2048
 Received frame of size 46 on interface 3
-Se trimite pe interfata: r-0
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
@@ -80,13 +78,11 @@ Destination MAC: de:ad:be:ef:00:00
 Source MAC: de:ad:be:ef:00:05
 EtherType: 2054
 Received frame of size 42 on interface 1
-Se trimite pe interfata: rr-1-2
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
 Destination MAC: de:ad:be:ef:00:05
 Source MAC: de:ad:be:ef:00:00
 EtherType: 2048
 Received frame of size 46 on interface 3
-Se trimite pe interfata: r-1
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
 {0: 'LISTENING', 1: 'LISTENING', 3: 'LISTENING', 2: 'BLOCKING'}
